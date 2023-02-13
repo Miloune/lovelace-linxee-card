@@ -24,7 +24,7 @@ const css = LitElement.prototype.css;
 
 const HELPERS = window.loadCardHelpers();
 
-export class contentCardLinxeeEditor extends LitElement {
+export class contentCardLixeeEditor extends LitElement {
   setConfig(config) {
     this._config = { ...config };
   }
@@ -226,4 +226,4 @@ export class contentCardLinxeeEditor extends LitElement {
   }
 }
 
-customElements.define("linxee-card-editor", contentCardLinxeeEditor);
+customElements.define("lixee-card-editor", contentCardLixeeEditor);

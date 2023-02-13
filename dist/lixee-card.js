@@ -7,16 +7,16 @@ const css = LitElement.prototype.css;
 const getMilli = hours => hours * 60 ** 2 * 10 ** 3;
 const toFloat = (value, decimals = 1) => Number.parseFloat(value).toFixed(decimals);
 
-const lsMapHistoryKey = "lovelace-card-linxee-mapHistory";
-const lsLastUpdateKey = "lovelace-card-linxee-lastUpdate";
+const lsMapHistoryKey = "lovelace-card-lixee-mapHistory";
+const lsLastUpdateKey = "lovelace-card-lixee-lastUpdate";
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "content-card-linxee",
-  name: "Carte linxee Enedis par Miloune",
-  description: "Carte pour l'intégration linxee.",
+  type: "content-card-lixee",
+  name: "Carte lixee Enedis par Miloune",
+  description: "Carte pour l'intégration lixee.",
   preview: true,
-  documentationURL: "https://github.com/Miloune/lovelace-linxee-card",
+  documentationURL: "https://github.com/Miloune/lovelace-lixee-card",
 });
 
 function hasConfigOrEntityChanged(element, changedProps) {
@@ -35,7 +35,7 @@ function hasConfigOrEntityChanged(element, changedProps) {
   return true;
 }
 
-class ContentCardLinxee extends LitElement {
+class ContentCardLixee extends LitElement {
   static get properties() {
     return {
       _config: {},
@@ -45,8 +45,8 @@ class ContentCardLinxee extends LitElement {
   }
 
   static async getConfigElement() {
-    await import("./linxee-card-editor.js");
-    return document.createElement("linxee-card-editor");
+    await import("./lixee-card-editor.js");
+    return document.createElement("lixee-card-editor");
   }
 
   /**
@@ -629,4 +629,4 @@ class ContentCardLinxee extends LitElement {
   }
 }
 
-customElements.define('content-card-linxee', ContentCardLinxee);
+customElements.define('content-card-lixee', ContentCardLixee);
