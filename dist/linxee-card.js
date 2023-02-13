@@ -4,13 +4,15 @@ const LitElement = Object.getPrototypeOf(
 const html = LitElement.prototype.html;
 const css = LitElement.prototype.css;
 
+const getMilli = hours => hours * 60 ** 2 * 10 ** 3;
+
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "content-card-linky",
-  name: "Carte Enedis par saniho",
-  description: "Carte pour l'intégration myEnedis.",
+  type: "content-card-linxee",
+  name: "Carte linxee Enedis par Miloune",
+  description: "Carte pour l'intégration linxee.",
   preview: true,
-  documentationURL: "https://github.com/saniho/content-card-linky",
+  documentationURL: "https://github.com/Miloune/lovelace-linxee-card",
 });
 const fireEvent = (node, type, detail, options) => {
   options = options || {};
@@ -34,89 +36,160 @@ function hasConfigOrEntityChanged(element, changedProps) {
   if (oldHass) {
     return (
       oldHass.states[element.config.entity] !==
-        element.hass.states[element.config.entity]
+      element.hass.states[element.config.entity]
     );
   }
 
   return true;
 }
 
-class ContentCardLinky extends LitElement {
+class ContentCardLinxee extends LitElement {
   static get properties() {
     return {
       config: {},
-      hass: {}
+      _hass: {}
     };
   }
 
   static async getConfigElement() {
-    await import("./content-card-linky-editor.js");
-    return document.createElement("content-card-linky-editor");
+    await import("./content-card-linxee-editor.js");
+    return document.createElement("content-card-linxee-editor");
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    // this.updateData();
+  }
+
+  async fetchRecent(entityId, start, end, skipInitialState, withAttributes) {
+    let url = 'history/period';
+    if (start) url += `/${start.toISOString()}`;
+    url += `?filter_entity_id=${entityId}`;
+    if (end) url += `&end_time=${end.toISOString()}`;
+    if (skipInitialState) url += '&skip_initial_state';
+    if (!withAttributes) url += '&minimal_response';
+    if (withAttributes) url += '&significant_changes_only=0';
+    return this._hass.callApi('GET', url);
+  }
+
+
+  getTodayDate() {
+    const date = new Date();
+    date.setHours(0, 0, 0);
+    return date;
+  }
+
+  getEndDate() {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    date.setHours(0, 0, 0);
+    return date;
+  }
+
+  async updateData() {
+
+    const end = this.getEndDate();
+    const start = new Date(end);
+    start.setMilliseconds(start.getMilliseconds() - getMilli(192));
+
+    let newStateHistory = await this.fetchRecent(
+      this.config.entity,
+      start,
+      end
+    );
+    newStateHistory = newStateHistory[0].filter(item => !Number.isNaN(parseFloat(item.state)));
+
+
+    console.log(newStateHistory);
+
+    const data = newStateHistory.reduce((acc, state) => {
+      const date = new Date(state.last_changed).toLocaleDateString();
+      if (!acc[date]) {
+        acc[date] = {
+          minValue: state.state,
+          maxValue: state.state,
+          count: 1
+        };
+      } else {
+        acc[date].count++;
+        acc[date].minValue = Math.min(acc[date].minValue, state.state);
+        acc[date].maxValue = Math.max(acc[date].maxValue, state.state);
+      }
+      return acc;
+    }, {});
+
+
+    const result = new Map();
+    Object.entries(data).forEach(([date, { minValue, maxValue, count }]) => {
+      result.set(date, maxValue - minValue);
+    });
+    this.data = result;
+    console.log(this.data);
   }
 
   render() {
-    if (!this.config || !this.hass) {
+    if (!this.config || !this._hass) {
       return html``;
     }
 
-    const stateObj = this.hass.states[this.config.entity];
+    this.updateData();
 
-    if (!stateObj) {
-      return html`
-        <ha-card>
-          <div class="card">
-            <div id="states">
-              <div class="name">
-                <ha-icon id="icon" icon="mdi:flash" data-state="unavailable" data-domain="connection" style="color: var(--state-icon-unavailable-color)"></ha-icon>
-                <span style="margin-right:2em">Linky : donnees inaccessible pour ${this.config.entity}</span>
+    const stateObj = this._hass.states[this.config.entity];
+    const attributes = stateObj.attributes;
+
+    if (!this.data) {
+      return html
+        `
+          <ha-card>
+            <div class="card">
+              <div id="states">
+                <div class="name">
+                  <ha-icon id="icon" icon="mdi:flash" data-state="unavailable" data-domain="connection" style="color: var(--state-icon-unavailable-color)"></ha-icon>
+                  <span style="margin-right:2em">Chargement des données pour ${this.config.entity}</span>
+                </div>
               </div>
             </div>
-          </div>
-        </ha-card> 
-      `
+          </ha-card> 
+        `
     }
 
-    const attributes = stateObj.attributes;
-    const modeCompteur = attributes["typeCompteur"];
-    
-    if (stateObj) {
-        if (( modeCompteur === "consommation" ) || ( !modeCompteur )){
-          return html`
+    return html
+      `
             <ha-card id="card">
               ${this.addEventListener('click', event => { this._showDetails(this.config.entity); })}
-              ${this.renderTitle(this.config)}
+              ${this.renderTitle()}
               <div class="card">
                 <div class="main-info">
                   ${this.config.showIcon
-                    ? html`
+        ? html`
                       <div class="icon-block">
                         <span class="linky-icon bigger" style="background: none, url(https://apps.lincs.enedis.fr/mes-prms/assets/images/compteurs/linky.svg) no-repeat; background-size: contain;"></span>
                       </div>`
-                    : html `` 
-                  }
+        : html``
+      }
                   ${this.config.showPeakOffPeak
-                    ? html`
+        ? html`
                       <div class="hp-hc-block">
-                        <span class="conso-hc">${this.toFloat(attributes.yesterday_HC)}</span><span class="conso-unit-hc"> ${attributes.unit_of_measurement} <span class="more-unit">(en HC)</span></span><br />
+                        <span class="conso-hc">${this.toFloat(this.data.get())}</span><span class="conso-unit-hc"> ${attributes.unit_of_measurement} <span class="more-unit">(en HC)</span></span><br />
                         <span class="conso-hp">${this.toFloat(attributes.yesterday_HP)}</span><span class="conso-unit-hp"> ${attributes.unit_of_measurement} <span class="more-unit">(en HP)</span></span>
                       </div>`
-                    : html`
+        : html`
                       <div class="cout-block">
-                        <span class="cout">${this.toFloat(attributes.yesterday_HCHP)}</span>
+                        <span class="cout">${this.toFloat(this.data.get(this.getTodayDate().toLocaleDateString()))}</span>
                         <span class="cout-unit">${attributes.unit_of_measurement}</span>
                       </div>`
-                  }
-                  ${this.config.showPrice 
-                    ? html `
+      }
+                  ${this.config.showPrice
+        ? html`
                     <div class="cout-block">
                       <span class="cout" title="Coût journalier">${this.toFloat(attributes.daily_cost, 2)}</span><span class="cout-unit"> €</span>
                     </div>`
-                    : html ``
-                   }
+        : html``
+      }
                 </div>
                 <div class="variations">
-                  ${this.config.showMonthRatio 
-                    ? html `
+                  ${this.config.showMonthRatio
+        ? html`
                     <span class="variations-linky">
                       <span class="ha-icon">
                         <ha-icon icon="mdi:arrow-right" style="display: inline-block; transform: rotate(${(attributes.monthly_evolution < 0) ? '45' : ((attributes.monthly_evolution == 0) ? "0" : "-45")}deg)">
@@ -127,10 +200,10 @@ class ContentCardLinky extends LitElement {
                           <span class="tooltiptext">Mois Precedent A-1 : ${attributes.last_month_last_year}<br>Mois Precedent : ${attributes.last_month}</span>
                       </div>
                     </span>`
-                    : html ``
-                   }
-                  ${this.config.showCurrentMonthRatio 
-                    ? html `
+        : html``
+      }
+                  ${this.config.showCurrentMonthRatio
+        ? html`
                     <span class="variations-linky">
                       <span class="ha-icon">
                         <ha-icon icon="mdi:arrow-right" style="display: inline-block; transform: rotate(${(attributes.current_month_evolution < 0) ? '45' : ((attributes.current_month_evolution == 0) ? "0" : "-45")}deg)">
@@ -141,10 +214,10 @@ class ContentCardLinky extends LitElement {
                           <span class="tooltiptext">Mois  A-1 : ${attributes.current_month_last_year}<br>Mois  : ${attributes.current_month}</span>
                       </div>
                     </span>`
-                    : html ``
-                   }
-                  ${this.config.showWeekRatio 
-                    ? html `
+        : html``
+      }
+                  ${this.config.showWeekRatio
+        ? html`
                     <span class="variations-linky">
                         <span class="ha-icon">
                           <ha-icon icon="mdi:arrow-right" style="display: inline-block; transform: rotate(${(attributes.current_week_evolution < 0) ? '45' : ((attributes.current_week_evolution == 0) ? "0" : "-45")}deg)">
@@ -155,10 +228,10 @@ class ContentCardLinky extends LitElement {
                         <span class="tooltiptext">Semaine A-1 : ${attributes.current_week_last_year}<br>Semaine courante : ${attributes.current_week}</span>
                     </div>
                       </span>`
-                    : html ``
-                   }
+        : html``
+      }
                   ${this.config.showYesterdayRatio
-                    ? html `
+        ? html`
                     <span class="variations-linky">
                         <span class="ha-icon">
                           <ha-icon icon="mdi:arrow-right" style="display: inline-block; transform: rotate(${(attributes.yesterday_evolution < 0) ? '45' : ((attributes.yesterday_evolution == 0) ? "0" : "-45")}deg)">
@@ -169,49 +242,26 @@ class ContentCardLinky extends LitElement {
                         <span class="tooltiptext">Hier A-1 : ${attributes.yesterdayLastYear}<br>Hier : ${attributes.yesterday}</span>
                     </div>
                       </span>`
-                    : html ``
-                   }
-                  ${this.config.showPeakOffPeak 
-                    ? html `
+        : html``
+      }
+                  ${this.config.showPeakOffPeak
+        ? html`
                       <span class="variations-linky">
                         <span class="ha-icon">
                           <ha-icon icon="mdi:flash"></ha-icon>
                         </span>
                         ${Math.round(attributes.peak_offpeak_percent)}<span class="unit"> % HP</span>
                       </span>`
-                    : html ``
-                   }
+        : html``
+      }
                   
                 </div>
-                ${this.renderHistory(attributes.daily, attributes.unit_of_measurement, attributes.dailyweek, attributes.dailyweek_cost, attributes.dailyweek_costHC, attributes.dailyweek_costHP, attributes.dailyweek_HC, attributes.dailyweek_HP, this.config)}
-                ${this.renderError(attributes.errorLastCall, this.config)}
-                ${this.renderVersion(attributes.versionUpdateAvailable, attributes.versionGit)}
+                ${this.renderHistory(attributes.unit_of_measurement)}
               </div>
             </ha-card>`
-        }
-        if ( modeCompteur === "production" ){
-          return html`
-            <ha-card>
-              <div class="card">
-                <div class="main-info">
-                  ${this.config.showIcon
-                    ? html`
-                      <div class="icon-block">
-                      <span class="linky-icon bigger" style="background: none, url(https://apps.lincs.enedis.fr/mes-prms/assets/images/compteurs/linky.svg) no-repeat; background-size: contain;"></span>
-                      </div>`
-                    : html `` 
-                  }
-                  <div class="cout-block">
-                    <span class="cout">${this.toFloat(stateObj.state)}</span>
-                    <span class="cout-unit">${attributes.unit_of_measurement}</span>
-                  </div>
-                </div>
-                ${this.renderError(attributes.errorLastCall, this.config)}
-              </div>
-            </ha-card>`
-        }
-    }
+
   }
+
   _showDetails(myEntity) {
     const event = new Event('hass-more-info', {
       bubbles: true,
@@ -224,7 +274,8 @@ class ContentCardLinky extends LitElement {
     this.dispatchEvent(event);
     return event;
   }
-  renderTitle(config) {
+
+  renderTitle() {
     if (this.config.showTitle === true) {
       return html
         `
@@ -232,212 +283,76 @@ class ContentCardLinky extends LitElement {
           <div class="main-title">
           <span>${this.config.titleName}</span>
           </div>
-          </div>` 
-       }
-  }
-  renderError(errorMsg, config) {
-    if (this.config.showError === true) {
-       if ( errorMsg != "" ){
-          return html
-            `
-              <div class="error-msg" style="color: red">
-                <ha-icon id="icon" icon="mdi:alert-outline"></ha-icon>
-                ${errorMsg}
-              </div>
-            `
-       }
-    }
-  }
-  renderVersion(versionUpdateAvailable, versionGit) {
-    if ( versionUpdateAvailable === true ){
-          return html
-            `
-              <div class="information-msg" style="color: red">
-                <ha-icon id="icon" icon="mdi:alert-outline"></ha-icon>
-                Nouvelle version disponible ${versionGit}
-              </div>
-            `
-    }
-    else{
-       return html ``
+          </div>`
     }
   }
 
-  renderHistory(daily, unit_of_measurement, dailyweek, dailyweek_cost, dailyweek_costHC, dailyweek_costHP, dailyweek_HC, dailyweek_HP, config) {
-    if (this.config.showHistory === true) {
-      if ( dailyweek != undefined){
-        var nbJours = dailyweek.toString().split(",").length ; 
-        if ( config.nbJoursAffichage <= nbJours ) { nbJours = config.nbJoursAffichage }
-        return html
-          `
-            <div class="week-history">
-            ${this.renderTitreLigne(config)}
-            ${daily.slice(0, nbJours).reverse().map((day, index) => this.renderDay(day, nbJours-index, unit_of_measurement, dailyweek, dailyweek_cost, dailyweek_costHC, dailyweek_costHP, 
-               dailyweek_HC, dailyweek_HP, config))}
-            </div>
-          `
-        }
+  renderHistory(unitOfMeasurement) {
+    if (this.config.showHistory === false) {
+      return;
     }
+
+    return html
+      `
+        <div class="week-history">
+        ${Array.from(this.data.entries()).slice(0, -1).map(([day, value]) => this.renderDay(day, unitOfMeasurement))}
+        </div>
+      `
+
   }
 
-  renderDay(day, dayNumber, unit_of_measurement, dailyweek, dailyweek_cost, dailyweek_costHC, dailyweek_costHP, dailyweek_HC, dailyweek_HP, config) {
+  renderDay(date, unitOfMeasurement) {
+    console.log(`render day ${date}`)
     return html
       `
         <div class="day">
-          ${this.renderDailyWeek(dailyweek, dayNumber, config)}
-          ${this.renderDailyValue(day, dayNumber, unit_of_measurement, config)}
-          ${this.renderDayPrice(dailyweek_cost, dayNumber, config)}
-          ${this.renderDayPriceHCHP(dailyweek_costHC, dayNumber, config)}
-          ${this.renderDayPriceHCHP(dailyweek_costHP, dayNumber, config)}
-          ${this.renderDayHCHP(dailyweek_HC, dayNumber, unit_of_measurement, config)}
-          ${this.renderDayHCHP(dailyweek_HP, dayNumber, unit_of_measurement, config)}
+          ${this.renderWeekDay(date)}
+          ${this.renderDailyValue(date, unitOfMeasurement)}
+          ${this.renderDayPrice(date)}
         </div>
       `
   }
-  renderDailyWeekTitre( maConfig, monTitre ){
-    if (maConfig === true) {
-       return html
-       `${monTitre}<br>
-       `
-      }
-    else{
-       return html
-       `
-       `
-    }
-  }
-  renderTitreLigne(config) {
-    if (this.config.showTitreLigne === true) {
-       return html
-       `
-        <div class="day">
-          ${this.renderDailyWeekTitre(true, "")}
-          ${this.renderDailyWeekTitre(true, "Conso")}
-          ${this.renderDailyWeekTitre(this.config.showDayPrice, "Prix")}
-          ${this.renderDailyWeekTitre(this.config.showDayPriceHCHP, "Prix HC")}
-          ${this.renderDailyWeekTitre(this.config.showDayPriceHCHP, "Prix HP")}
-          ${this.renderDailyWeekTitre(this.config.showDayHCHP, "HC")}
-          ${this.renderDailyWeekTitre(this.config.showDayHCHP, "HP")}
-        </div>
-        `
-    }
-  }
-  r_enderTitreLigne(config) {
-    if (this.config.showTitreLigne === true) {
-        return html
-        `
-            <div class="day">
-        <br><span class="cons-val">Conso.</span>
-        ${this.config.showDayPrice 
-        ? html `
-        <br><span class="cons-val">Prix</span>`
-        : html ``
-        }
-        ${this.config.showDayPriceHCHP
-        ? html `
-        <br><span class="cons-val">Prix HC</span>`
-        : html ``
-        }
-        ${this.config.showDayPriceHCHP 
-        ? html `
-        <br><span class="cons-val">Prix HP</span>`
-        : html ``
-        }
-        ${this.config.showDayHCHP 
-        ? html `
-        <br><span class="cons-val">HC</span>`
-        : html ``
-        }
-        ${this.config.showDayHCHP 
-        ? html `
-        <br><span class="cons-val">HP</span>`
-        : html ``
-        }
-            </div>
-        `;
-      }
-  }
-  renderDailyWeek(value, dayNumber, config) {
+
+  renderWeekDay(date) {
+    // TODO probably improve me
+    let dateParts = date.split("/");
+    let day = parseInt(dateParts[0]);
+    let month = parseInt(dateParts[1]) - 1;
+    let year = parseInt(dateParts[2]);
     return html
-    `
-    <span class="dayname">${new Date(value.toString().split(",")[dayNumber-1]).toLocaleDateString('fr-FR', {weekday: config.showDayName})}</span>
-    `;
+      `
+      <span class="dayname">${new Date(year, month, day).toLocaleDateString(this._hass.language, { weekday: this.config.showDayName })}</span>
+      `;
   }
-  renderNoData(){
-     return html
-          `
-             <br><span class="cons-val" title="Donnée indisponible"><ha-icon id="icon" icon="mdi:alert-outline"></ha-icon></span>
-           ` ;
+
+  renderNoData() {
+    return html
+      `
+        <br><span class="cons-val" title="Donnée indisponible"><ha-icon id="icon" icon="mdi:alert-outline"></ha-icon></span>
+      ` ;
   }
-  renderDailyValue(day, dayNumber, unit_of_measurement, config) {
-    if ( day === -1 ){
-        return this.renderNoData();
+
+  renderDailyValue(date, unitOfMeasurement) {
+    if (date === -1) {
+      return this.renderNoData();
     }
-    else{
-        return html
-        `
-        <br><span class="cons-val">${this.toFloat(day)} 
-                  ${this.config.showInTableUnit 
-                    ? html `
-                      ${unit_of_measurement}`
-                    : html ``
-                   }</span>
-       `;
-    }
+
+    return html
+      `
+      <br><span class="cons-val">${this.toFloat(this.data.get(date))} ${unitOfMeasurement}</span>
+      `;
+
   }
-  renderDayPrice(value, dayNumber, config) {
-    if (config.kWhPrice) {
+
+  renderDayPrice(date) {
+    if (this.config.kWhPrice) {
       return html
-      `
-        <br><span class="cons-val">${this.toFloat(value * config.kWhPrice, 2)} €</span>
+        `
+        <br><span class="cons-val">${this.toFloat(this.data.get(date) * this.config.kWhPrice, 2)} €</span>
       `;
     }
-    if (config.showDayPrice) {
-       const valeur = value.toString().split(",")[dayNumber-1] ;
-       if ( valeur === "-1" ){
-          return this.renderNoData();
-       }
-       else{
-          return html
-          `
-             <br><span class="cons-val">${this.toFloat(valeur)} €</span>
-           `;
-       }
-    }
   }
-  renderDayPriceHCHP(value, dayNumber, config) {
-    if (config.showDayPriceHCHP) {
-       const valeur = value.toString().split(",")[dayNumber-1] ;
-       if ( valeur === "-1" ){
-          return this.renderNoData();
-       }
-       else{
-          return html
-          `
-             <br><span class="cons-val">${this.toFloat(valeur, 2)} €</span>
-          `;
-       }
-    }
-  }
-  renderDayHCHP(value, dayNumber, unit_of_measurement, config) {
-    if (config.showDayHCHP) {
-       const valeur = value.toString().split(",")[dayNumber-1] ;
-       if ( valeur === "-1" ){
-          return this.renderNoData();
-       }
-       else{
-          return html
-          `
-             <br><span class="cons-val">${this.toFloat(valeur, 2)} 
-           ${this.config.showInTableUnit 
-                   ? html `
-                     ${unit_of_measurement}`
-                   : html ``
-                  }</span>
-          `;
-        }
-    }
-  }
+
 
   setConfig(config) {
     if (!config.entity) {
@@ -447,7 +362,7 @@ class ContentCardLinky extends LitElement {
     if (config.kWhPrice && isNaN(config.kWhPrice)) {
       throw new Error('kWhPrice should be a number')
     }
-    
+
     const defaultConfig = {
       showHistory: true,
       showPeakOffPeak: true,
@@ -484,30 +399,30 @@ class ContentCardLinky extends LitElement {
   getCardSize() {
     return 3;
   }
- 
+
   toFloat(value, decimals = 1) {
     return Number.parseFloat(value).toFixed(decimals);
   }
-  
+
   previousMonth() {
     var d = new Date();
-    d.setMonth(d.getMonth()-1) ;
-    d.setFullYear(d.getFullYear()-1 );
-    
-    return d.toLocaleDateString('fr-FR', {month: "long", year: "numeric"});
-  } 
+    d.setMonth(d.getMonth() - 1);
+    d.setFullYear(d.getFullYear() - 1);
+
+    return d.toLocaleDateString('fr-FR', { month: "long", year: "numeric" });
+  }
   currentMonth() {
     var d = new Date();
-    d.setFullYear(d.getFullYear()-1 );
-    
-    return d.toLocaleDateString('fr-FR', {month: "long", year: "numeric"});
-  } 
+    d.setFullYear(d.getFullYear() - 1);
+
+    return d.toLocaleDateString('fr-FR', { month: "long", year: "numeric" });
+  }
   weekPreviousYear() {
     return "semaine";
-  } 
+  }
   yesterdayPreviousYear() {
     return "hier";
-  } 
+  }
 
 
   static get styles() {
@@ -669,4 +584,4 @@ class ContentCardLinky extends LitElement {
   }
 }
 
-customElements.define('content-card-linky', ContentCardLinky);
+customElements.define('content-card-linxee', ContentCardLinxee);

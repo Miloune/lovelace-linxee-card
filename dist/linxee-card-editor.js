@@ -24,7 +24,7 @@ const css = LitElement.prototype.css;
 
 const HELPERS = window.loadCardHelpers();
 
-export class contentCardLinkyEditor extends LitElement {
+export class contentCardLinxeeEditor extends LitElement {
   setConfig(config) {
     this._config = { ...config };
   }
@@ -48,47 +48,47 @@ export class contentCardLinkyEditor extends LitElement {
   get _showHistory() {
     return this._config.showHistory !== false;
   }
-  
+
   get _showPeakOffPeak() {
     return this._config.showPeakOffPeak !== false;
   }
-  
+
   get _showInTableUnit() {
     return this._config.showInTableUnit !== false;
   }
-  
+
   get _showDayPrice() {
     return this._config.showDayPrice !== false;
   }
-  
+
   get _showDayPriceHCHP() {
     return this._config.showDayPriceHCHP !== false;
   }
-  
+
   get _showPrice() {
     return this._config.showPrice !== false;
   }
-  
+
   get _showTitle() {
     return this._config.showTitle !== false;
   }
-  
+
   get _showDayHCHP() {
     return this._config.showDayHCHP !== false;
   }
-  
+
   get _showCurrentMonthRatio() {
     return this._config.showCurrentMonthRatio !== false;
   }
-  
+
   get _showMonthRatio() {
     return this._config.showMonthRatio !== false;
   }
-  
+
   get _showWeekRatio() {
     return this._config.showWeekRatio !== false;
   }
-  
+
   get _showYesterdayRatio() {
     return this._config.showYesterdayRatio !== false;
   }
@@ -102,7 +102,7 @@ export class contentCardLinkyEditor extends LitElement {
   get _title() {
     return this._config.showTitle !== false;
   }
-  
+
   get _current() {
     return this._config.current !== false;
   }
@@ -118,9 +118,13 @@ export class contentCardLinkyEditor extends LitElement {
   get _showDayName() {
     return this._config.showDayName;
   }
-  
+
   get _titleName() {
     return this._config.titleName || "";
+  }
+
+  get _kWhPrice() {
+    return this._config.kWhPrice || "";
   }
 
   firstUpdated() {
@@ -184,7 +188,7 @@ export class contentCardLinkyEditor extends LitElement {
       </div>
     `;
   }
-  
+
   renderLinkyPicker(label, entity, configAttr) {
     return this.renderPicker(label, entity, configAttr, "sensor.myenedis");
   }
@@ -255,4 +259,4 @@ export class contentCardLinkyEditor extends LitElement {
   }
 }
 
-customElements.define("content-card-linky-editor", contentCardLinkyEditor);
+customElements.define("content-card-linxee-editor", contentCardLinxeeEditor);
