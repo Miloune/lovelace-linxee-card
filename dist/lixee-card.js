@@ -190,7 +190,7 @@ class ContentCardLixee extends LitElement {
     let lastUpdateAsString = localStorage.getItem(lsLastUpdateKey);
 
     // Update once a day
-    if (mapAsJson && lastUpdateAsString && this.getDateDay().getTime() < new Date(lastUpdateAsString).getTime()) {
+    if (mapAsJson && lastUpdateAsString && this.getTodayDate().getTime() < new Date(lastUpdateAsString).getTime()) {
       return;
     }
 
