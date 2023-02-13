@@ -5,6 +5,10 @@ const html = LitElement.prototype.html;
 const css = LitElement.prototype.css;
 
 const getMilli = hours => hours * 60 ** 2 * 10 ** 3;
+const toFloat = (value, decimals = 1) => Number.parseFloat(value).toFixed(decimals);
+
+const lsMapHistoryKey = "lovelace-card-linxee-mapHistory";
+const lsLastUpdateKey = "lovelace-card-linxee-lastUpdate";
 
 window.customCards = window.customCards || [];
 window.customCards.push({
@@ -14,18 +18,6 @@ window.customCards.push({
   preview: true,
   documentationURL: "https://github.com/Miloune/lovelace-linxee-card",
 });
-const fireEvent = (node, type, detail, options) => {
-  options = options || {};
-  detail = detail === null || detail === undefined ? {} : detail;
-  const event = new Event(type, {
-    bubbles: options.bubbles === undefined ? true : options.bubbles,
-    cancelable: Boolean(options.cancelable),
-    composed: options.composed === undefined ? true : options.composed,
-  });
-  event.detail = detail;
-  node.dispatchEvent(event);
-  return event;
-};
 
 function hasConfigOrEntityChanged(element, changedProps) {
   if (changedProps.has("config")) {
@@ -46,22 +38,59 @@ function hasConfigOrEntityChanged(element, changedProps) {
 class ContentCardLinxee extends LitElement {
   static get properties() {
     return {
-      config: {},
-      _hass: {}
+      _config: {},
+      _hass: {},
+      _data: new Map()
     };
   }
 
   static async getConfigElement() {
-    await import("./content-card-linxee-editor.js");
-    return document.createElement("content-card-linxee-editor");
+    await import("./linxee-card-editor.js");
+    return document.createElement("linxee-card-editor");
   }
 
+  /**
+   * https://lit.dev/docs/components/lifecycle/#connectedcallback
+   */
+  connectedCallback() {
+    super.connectedCallback();
+
+    let mapAsJson = localStorage.getItem(lsMapHistoryKey);
+    if (mapAsJson) {
+      this._data = new Map(JSON.parse(mapAsJson));
+    }
+
+    this._updateHistoryData();
+    this._updateTodayData();
+    this._interval = setInterval(
+      () => this._updateTodayData(),
+      this._config.updateInterval * 1000,
+    );
+  }
+
+  /**
+   * https://lit.dev/docs/components/lifecycle/#disconnectedcallback
+   */
+  disconnectedCallback() {
+    if (this._interval) {
+      clearInterval(this._interval);
+    }
+    super.disconnectedCallback();
+  }
+
+  /**
+   * Home Assistant will set the hass property when the state of Home Assistant changes (frequent). 
+   * Whenever the state changes, the component will have to update itself to represent the latest state.
+   * @param {any} hass
+   */
   set hass(hass) {
     this._hass = hass;
-    // this.updateData();
+    if (!this._data) {
+      this._data = new Map()
+    }
   }
 
-  async fetchRecent(entityId, start, end, skipInitialState, withAttributes) {
+  async _fetchData(entityId, start, end, skipInitialState, withAttributes) {
     let url = 'history/period';
     if (start) url += `/${start.toISOString()}`;
     url += `?filter_entity_id=${entityId}`;
@@ -72,11 +101,17 @@ class ContentCardLinxee extends LitElement {
     return this._hass.callApi('GET', url);
   }
 
+  getPriceFromData(date) {
+    return toFloat(this._data.get(date.toString()) * this._config.kWhPrice, 2)
+  }
 
-  getTodayDate() {
-    const date = new Date();
+  getDateDay(date) {
     date.setHours(0, 0, 0);
     return date;
+  }
+
+  getTodayDate() {
+    return this.getDateDay(new Date());
   }
 
   getEndDate() {
@@ -86,58 +121,97 @@ class ContentCardLinxee extends LitElement {
     return date;
   }
 
-  async updateData() {
+
+  _previousMonth() {
+    var d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    d.setFullYear(d.getFullYear() - 1);
+
+    return d.toLocaleDateString('fr-FR', { month: "long", year: "numeric" });
+  }
+  _currentMonth() {
+    var d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+
+    return d.toLocaleDateString('fr-FR', { month: "long", year: "numeric" });
+  }
+  _weekPreviousYear() {
+    return "semaine";
+  }
+  _yesterdayPreviousYear() {
+    return "hier";
+  }
+
+  _updateData(dataHistory) {
+    var data = dataHistory[0].filter(item => !Number.isNaN(parseFloat(item.state)))
+      .reduce((acc, state) => {
+        const date = this.getDateDay(new Date(state.last_changed)).toString();
+
+        if (!acc[date]) {
+          acc[date] = {
+            minValue: state.state,
+            maxValue: state.state,
+            count: 1
+          };
+        } else {
+          acc[date].count++;
+          acc[date].minValue = Math.min(acc[date].minValue, state.state);
+          acc[date].maxValue = Math.max(acc[date].maxValue, state.state);
+        }
+        return acc;
+      }, {});
+
+    Object.entries(data).forEach(([date, { minValue, maxValue, count }]) => {
+      this._data.set(date, maxValue - minValue);
+    });
+    localStorage.setItem(lsMapHistoryKey, JSON.stringify(Array.from(this._data.entries())))
+  }
+
+  async _updateTodayData() {
+    const end = this.getEndDate();
+    const start = new Date(end);
+    start.setMilliseconds(start.getMilliseconds() - getMilli(24));
+
+    let newStateHistory = await this._fetchData(
+      this._config.entity,
+      start,
+      end
+    );
+    this._updateData(newStateHistory)
+  }
+
+  async _updateHistoryData() {
 
     const end = this.getEndDate();
     const start = new Date(end);
     start.setMilliseconds(start.getMilliseconds() - getMilli(192));
 
-    let newStateHistory = await this.fetchRecent(
-      this.config.entity,
+    let mapAsJson = localStorage.getItem(lsMapHistoryKey);
+    let lastUpdateAsString = localStorage.getItem(lsLastUpdateKey);
+
+    // Update once a day
+    if (mapAsJson && lastUpdateAsString && this.getDateDay().getTime() < new Date(lastUpdateAsString).getTime()) {
+      return;
+    }
+
+    let newStateHistory = await this._fetchData(
+      this._config.entity,
       start,
       end
     );
-    newStateHistory = newStateHistory[0].filter(item => !Number.isNaN(parseFloat(item.state)));
-
-
-    console.log(newStateHistory);
-
-    const data = newStateHistory.reduce((acc, state) => {
-      const date = new Date(state.last_changed).toLocaleDateString();
-      if (!acc[date]) {
-        acc[date] = {
-          minValue: state.state,
-          maxValue: state.state,
-          count: 1
-        };
-      } else {
-        acc[date].count++;
-        acc[date].minValue = Math.min(acc[date].minValue, state.state);
-        acc[date].maxValue = Math.max(acc[date].maxValue, state.state);
-      }
-      return acc;
-    }, {});
-
-
-    const result = new Map();
-    Object.entries(data).forEach(([date, { minValue, maxValue, count }]) => {
-      result.set(date, maxValue - minValue);
-    });
-    this.data = result;
-    console.log(this.data);
+    this._updateData(newStateHistory)
+    localStorage.setItem(lsLastUpdateKey, new Date().toString());
   }
 
   render() {
-    if (!this.config || !this._hass) {
+    if (!this._config || !this._hass) {
       return html``;
     }
 
-    this.updateData();
-
-    const stateObj = this._hass.states[this.config.entity];
+    const stateObj = this._hass.states[this._config.entity];
     const attributes = stateObj.attributes;
 
-    if (!this.data) {
+    if (!this._data) {
       return html
         `
           <ha-card>
@@ -145,7 +219,7 @@ class ContentCardLinxee extends LitElement {
               <div id="states">
                 <div class="name">
                   <ha-icon id="icon" icon="mdi:flash" data-state="unavailable" data-domain="connection" style="color: var(--state-icon-unavailable-color)"></ha-icon>
-                  <span style="margin-right:2em">Chargement des données pour ${this.config.entity}</span>
+                  <span style="margin-right:2em">Chargement des données pour ${this._config.entity}</span>
                 </div>
               </div>
             </div>
@@ -156,39 +230,33 @@ class ContentCardLinxee extends LitElement {
     return html
       `
             <ha-card id="card">
-              ${this.addEventListener('click', event => { this._showDetails(this.config.entity); })}
-              ${this.renderTitle()}
+              ${this.addEventListener('click', event => { this._showDetails(this._config.entity); })}
+              ${this._renderTitle()}
               <div class="card">
                 <div class="main-info">
-                  ${this.config.showIcon
+                  ${this._config.showIcon
         ? html`
                       <div class="icon-block">
                         <span class="linky-icon bigger" style="background: none, url(https://apps.lincs.enedis.fr/mes-prms/assets/images/compteurs/linky.svg) no-repeat; background-size: contain;"></span>
                       </div>`
         : html``
       }
-                  ${this.config.showPeakOffPeak
-        ? html`
-                      <div class="hp-hc-block">
-                        <span class="conso-hc">${this.toFloat(this.data.get())}</span><span class="conso-unit-hc"> ${attributes.unit_of_measurement} <span class="more-unit">(en HC)</span></span><br />
-                        <span class="conso-hp">${this.toFloat(attributes.yesterday_HP)}</span><span class="conso-unit-hp"> ${attributes.unit_of_measurement} <span class="more-unit">(en HP)</span></span>
-                      </div>`
-        : html`
-                      <div class="cout-block">
-                        <span class="cout">${this.toFloat(this.data.get(this.getTodayDate().toLocaleDateString()))}</span>
-                        <span class="cout-unit">${attributes.unit_of_measurement}</span>
-                      </div>`
+      ${html`
+            <div class="cout-block">
+              <span class="cout">${toFloat(this._data.get(this.getTodayDate().toString()))}</span>
+              <span class="cout-unit">${attributes.unit_of_measurement}</span>
+            </div>`
       }
-                  ${this.config.showPrice
+                  ${this._config.showPrice && this._config.kWhPrice
         ? html`
                     <div class="cout-block">
-                      <span class="cout" title="Coût journalier">${this.toFloat(attributes.daily_cost, 2)}</span><span class="cout-unit"> €</span>
+                      <span class="cout" title="Coût journalier">${this.getPriceFromData(this.getTodayDate())}</span><span class="cout-unit"> €</span>
                     </div>`
         : html``
       }
                 </div>
                 <div class="variations">
-                  ${this.config.showMonthRatio
+                  ${this._config.showMonthRatio
         ? html`
                     <span class="variations-linky">
                       <span class="ha-icon">
@@ -196,13 +264,13 @@ class ContentCardLinxee extends LitElement {
                        </ha-icon>
                       </span>
                       <div class="tooltip">
-                      ${Math.round(attributes.monthly_evolution)}<span class="unit"> %</span><span class="previous-month">par rapport à ${this.previousMonth()}</span>
+                      ${Math.round(attributes.monthly_evolution)}<span class="unit"> %</span><span class="previous-month">par rapport à ${this._previousMonth()}</span>
                           <span class="tooltiptext">Mois Precedent A-1 : ${attributes.last_month_last_year}<br>Mois Precedent : ${attributes.last_month}</span>
                       </div>
                     </span>`
         : html``
       }
-                  ${this.config.showCurrentMonthRatio
+                  ${this._config.showCurrentMonthRatio
         ? html`
                     <span class="variations-linky">
                       <span class="ha-icon">
@@ -210,13 +278,13 @@ class ContentCardLinxee extends LitElement {
                        </ha-icon>
                       </span>
                       <div class="tooltip">
-                      ${Math.round(attributes.current_month_evolution)}<span class="unit"> %</span><span class="current-month">par rapport à ${this.currentMonth()}</span>
+                      ${Math.round(attributes.current_month_evolution)}<span class="unit"> %</span><span class="current-month">par rapport à ${this._currentMonth()}</span>
                           <span class="tooltiptext">Mois  A-1 : ${attributes.current_month_last_year}<br>Mois  : ${attributes.current_month}</span>
                       </div>
                     </span>`
         : html``
       }
-                  ${this.config.showWeekRatio
+                  ${this._config.showWeekRatio
         ? html`
                     <span class="variations-linky">
                         <span class="ha-icon">
@@ -224,13 +292,13 @@ class ContentCardLinxee extends LitElement {
                           </ha-icon>
                         </span>
                         <div class="tooltip">
-                        ${Math.round(attributes.current_week_evolution)}<span class="unit"> %</span><span class="previous-month">par rapport à ${this.weekPreviousYear()}</span>
+                        ${Math.round(attributes.current_week_evolution)}<span class="unit"> %</span><span class="previous-month">par rapport à ${this._weekPreviousYear()}</span>
                         <span class="tooltiptext">Semaine A-1 : ${attributes.current_week_last_year}<br>Semaine courante : ${attributes.current_week}</span>
                     </div>
                       </span>`
         : html``
       }
-                  ${this.config.showYesterdayRatio
+                  ${this._config.showYesterdayRatio
         ? html`
                     <span class="variations-linky">
                         <span class="ha-icon">
@@ -238,25 +306,14 @@ class ContentCardLinxee extends LitElement {
                          </ha-icon>
                         </span>
                         <div class="tooltip">
-                        ${Math.round(attributes.yesterday_evolution)}<span class="unit"> %</span><span class="previous-month">par rapport à ${this.yesterdayPreviousYear()}</span>
+                        ${Math.round(attributes.yesterday_evolution)}<span class="unit"> %</span><span class="previous-month">par rapport à ${this._yesterdayPreviousYear()}</span>
                         <span class="tooltiptext">Hier A-1 : ${attributes.yesterdayLastYear}<br>Hier : ${attributes.yesterday}</span>
                     </div>
                       </span>`
         : html``
-      }
-                  ${this.config.showPeakOffPeak
-        ? html`
-                      <span class="variations-linky">
-                        <span class="ha-icon">
-                          <ha-icon icon="mdi:flash"></ha-icon>
-                        </span>
-                        ${Math.round(attributes.peak_offpeak_percent)}<span class="unit"> % HP</span>
-                      </span>`
-        : html``
-      }
-                  
+      }                 
                 </div>
-                ${this.renderHistory(attributes.unit_of_measurement)}
+                ${this._renderHistory(attributes.unit_of_measurement)}
               </div>
             </ha-card>`
 
@@ -275,85 +332,91 @@ class ContentCardLinxee extends LitElement {
     return event;
   }
 
-  renderTitle() {
-    if (this.config.showTitle === true) {
+  _renderTitle() {
+    if (this._config.showTitle === true) {
       return html
         `
           <div class="card">
           <div class="main-title">
-          <span>${this.config.titleName}</span>
+          <span>${this._config.titleName}</span>
           </div>
           </div>`
     }
   }
 
-  renderHistory(unitOfMeasurement) {
-    if (this.config.showHistory === false) {
+  _renderHistory(unitOfMeasurement) {
+    if (this._config.showHistory === false) {
       return;
     }
 
     return html
       `
         <div class="week-history">
-        ${Array.from(this.data.entries()).slice(0, -1).map(([day, value]) => this.renderDay(day, unitOfMeasurement))}
+        ${Array.from(this._data.entries()).filter(([key, value]) => key !== this.getTodayDate().toString()).map(([date, value]) => {
+        return this._renderDay(date, unitOfMeasurement)
+      })}
         </div>
       `
 
   }
 
-  renderDay(date, unitOfMeasurement) {
-    console.log(`render day ${date}`)
+  _renderDay(date, unitOfMeasurement) {
     return html
       `
         <div class="day">
-          ${this.renderWeekDay(date)}
-          ${this.renderDailyValue(date, unitOfMeasurement)}
-          ${this.renderDayPrice(date)}
+          ${this._renderWeekDay(date)}
+          ${this._renderDailyValue(date, unitOfMeasurement)}
+          ${this._renderDayPrice(date)}
         </div>
       `
   }
 
-  renderWeekDay(date) {
-    // TODO probably improve me
-    let dateParts = date.split("/");
-    let day = parseInt(dateParts[0]);
-    let month = parseInt(dateParts[1]) - 1;
-    let year = parseInt(dateParts[2]);
+  _renderWeekDay(date) {
     return html
       `
-      <span class="dayname">${new Date(year, month, day).toLocaleDateString(this._hass.language, { weekday: this.config.showDayName })}</span>
+      <span class="dayname">${new Date(date).toLocaleDateString(this._hass.language, { weekday: this._config.showDayName })}</span>
       `;
   }
 
-  renderNoData() {
+  _renderNoData() {
     return html
       `
         <br><span class="cons-val" title="Donnée indisponible"><ha-icon id="icon" icon="mdi:alert-outline"></ha-icon></span>
       ` ;
   }
 
-  renderDailyValue(date, unitOfMeasurement) {
+  _renderDailyValue(date, unitOfMeasurement) {
+    // TODO check
     if (date === -1) {
-      return this.renderNoData();
+      return this._renderNoData();
     }
 
     return html
       `
-      <br><span class="cons-val">${this.toFloat(this.data.get(date))} ${unitOfMeasurement}</span>
+      <br><span class="cons-val">${toFloat(this._data.get(date.toString()))} ${this._config.showInTableUnit
+        ? html`
+          ${unitOfMeasurement}`
+        : html``
+      }</span>
       `;
 
   }
 
-  renderDayPrice(date) {
-    if (this.config.kWhPrice) {
+  _renderDayPrice(date) {
+    if (this._config.kWhPrice) {
       return html
         `
-        <br><span class="cons-val">${this.toFloat(this.data.get(date) * this.config.kWhPrice, 2)} €</span>
+        <br><span class="cons-val">${this.getPriceFromData(date)} €</span>
       `;
     }
   }
 
 
+  /**
+   * Home Assistant will call setConfig(config) when the configuration changes (rare). 
+   * If you throw an exception if the configuration is invalid, Home Assistant will render an error card to notify the user.
+   * @param {*} config 
+   */
   setConfig(config) {
     if (!config.entity) {
       throw new Error('You need to define an entity');
@@ -363,34 +426,39 @@ class ContentCardLinxee extends LitElement {
       throw new Error('kWhPrice should be a number')
     }
 
-    const defaultConfig = {
-      showHistory: true,
-      showPeakOffPeak: true,
-      showIcon: false,
-      showInTableUnit: false,
-      showDayPrice: false,
-      showDayPriceHCHP: false,
-      showDayHCHP: false,
-      showDayName: "long",
-      showError: true,
-      showPrice: true,
-      showTitle: false,
-      showCurrentMonthRatio: true,
-      showMonthRatio: true,
-      showWeekRatio: false,
-      showYesterdayRatio: false,
-      showTitreLigne: false,
-      titleName: "",
-      nbJoursAffichage: 7,
-      kWhPrice: undefined,
+    if (config.showDayName && config.showDayName != "long" && config.showDayName != "short" && config.showDayName != "narrow") {
+      throw new Error('showDayName should be "long" or "short" or "narrow"')
     }
 
-    this.config = {
+    const defaultConfig = {
+      titleName: "",
+      showHistory: true,
+      showIcon: false,
+      showInTableUnit: false,
+      showDayName: "long",
+      showPrice: true,
+      showTitle: false,
+      kWhPrice: undefined,
+      updateInterval: 60,
+
+      showCurrentMonthRatio: false,
+      showMonthRatio: false,
+      showWeekRatio: false,
+      showYesterdayRatio: false,
+    }
+
+    this._config = {
       ...defaultConfig,
       ...config
     };
   }
 
+  /**
+   * https://lit.dev/docs/components/lifecycle/#shouldupdate
+   * 
+   * @param {*} changedProps 
+   * @returns
+   */
   shouldUpdate(changedProps) {
     return hasConfigOrEntityChanged(this, changedProps);
   }
@@ -400,29 +468,6 @@ class ContentCardLinxee extends LitElement {
     return 3;
   }
 
-  toFloat(value, decimals = 1) {
-    return Number.parseFloat(value).toFixed(decimals);
-  }
-
-  previousMonth() {
-    var d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    d.setFullYear(d.getFullYear() - 1);
-
-    return d.toLocaleDateString('fr-FR', { month: "long", year: "numeric" });
-  }
-  currentMonth() {
-    var d = new Date();
-    d.setFullYear(d.getFullYear() - 1);
-
-    return d.toLocaleDateString('fr-FR', { month: "long", year: "numeric" });
-  }
-  weekPreviousYear() {
-    return "semaine";
-  }
-  yesterdayPreviousYear() {
-    return "hier";
-  }
 
 
   static get styles() {

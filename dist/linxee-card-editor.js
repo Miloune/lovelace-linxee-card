@@ -49,10 +49,6 @@ export class contentCardLinxeeEditor extends LitElement {
     return this._config.showHistory !== false;
   }
 
-  get _showPeakOffPeak() {
-    return this._config.showPeakOffPeak !== false;
-  }
-
   get _showInTableUnit() {
     return this._config.showInTableUnit !== false;
   }
@@ -61,42 +57,12 @@ export class contentCardLinxeeEditor extends LitElement {
     return this._config.showDayPrice !== false;
   }
 
-  get _showDayPriceHCHP() {
-    return this._config.showDayPriceHCHP !== false;
-  }
-
   get _showPrice() {
     return this._config.showPrice !== false;
   }
 
   get _showTitle() {
     return this._config.showTitle !== false;
-  }
-
-  get _showDayHCHP() {
-    return this._config.showDayHCHP !== false;
-  }
-
-  get _showCurrentMonthRatio() {
-    return this._config.showCurrentMonthRatio !== false;
-  }
-
-  get _showMonthRatio() {
-    return this._config.showMonthRatio !== false;
-  }
-
-  get _showWeekRatio() {
-    return this._config.showWeekRatio !== false;
-  }
-
-  get _showYesterdayRatio() {
-    return this._config.showYesterdayRatio !== false;
-  }
-  get _showError() {
-    return this._config.showError !== false;
-  }
-  get _showTitreLigne() {
-    return this._config.showTitreLigne !== false;
   }
 
   get _title() {
@@ -111,10 +77,6 @@ export class contentCardLinxeeEditor extends LitElement {
     return this._config.details !== false;
   }
 
-  get _nbJoursAffichage() {
-    return this._config.nbJoursAffichage || 7;
-  }
-
   get _showDayName() {
     return this._config.showDayName;
   }
@@ -125,6 +87,10 @@ export class contentCardLinxeeEditor extends LitElement {
 
   get _kWhPrice() {
     return this._config.kWhPrice || "";
+  }
+
+  get _updateInterval() {
+    return this._config.updateInterval || 60;
   }
 
   firstUpdated() {
@@ -155,31 +121,32 @@ export class contentCardLinxeeEditor extends LitElement {
             ${this.renderSwitchOption("Show icon", this._showIcon, "showIcon")}
             ${this.renderSwitchOption("Show titre", this._showTitle, "showTitle")}
             ${this.renderSwitchOption("Show history", this._showHistory, "showHistory")}
-            ${this.renderSwitchOption("Show Heures Creuses", this._showPeakOffPeak, "showPeakOffPeak")}
             ${this.renderSwitchOption("Show unité", this._showInTableUnit, "showInTableUnit")}
-            ${this.renderSwitchOption("Show prix/jour", this._showDayPrice, "showDayPrice")}
-            ${this.renderSwitchOption("Show prix HC/HP", this._showDayPriceHCHP, "showDayPriceHCHP")}
             ${this.renderSwitchOption("Show prix", this._showPrice, "showPrice")}
-            ${this.renderSwitchOption("Show jours HC/HP", this._showDayHCHP, "showDayHCHP")}
-            ${this.renderSwitchOption("Show ratio mois", this._showCurrentMonthRatio, "showCurrentMonthRatio")}
-            ${this.renderSwitchOption("Show ratio mois precedent", this._showMonthRatio, "showMonthRatio")}
-            ${this.renderSwitchOption("Show ratio semaine", this._showWeekRatio, "showWeekRatio")}
-            ${this.renderSwitchOption("Show ratio hier", this._showYesterdayRatio, "showYesterdayRatio")}
-            ${this.renderSwitchOption("Show titre ligne", this._showTitreLigne, "showTitreLigne")}
-            ${this.renderSwitchOption("Show error", this._showError, "showError")}
           </ul>
           <!-- -->
           <paper-input
-            label="nombre de jours"
+            label="Prix du kWh"
             type="number"
-            min="1"
-            max="12"
-            value=${this._nbJoursAffichage}
-            .configValue="${"nbJoursAffichage"}"
+            min="0"
+            step="0.001"
+            value=${this._kWhPrice}
+            .configValue="${"kWhPrice"}"
             @value-changed="${this._valueChanged}"
-          ></paper-input><br>
+          ></paper-input>
+          <br>
           <paper-input
-            label="Nom du jour de la semaine( valeur possible : long, short, narrow )"
+            label="Interval de mise à jour (secondes)"
+            type="number"
+            min="60"
+            step="10"
+            value=${this._updateInterval}
+            .configValue="${"updateInterval"}"
+            @value-changed="${this._valueChanged}"
+          ></paper-input>
+          <br>
+          <paper-input
+            label="Mode d'affichage du jour de la semaine (valeur possible : long, short, narrow)"
             .value="${this._showDayName}"
             .configValue="${"showDayName"}"
             @value-changed="${this._valueChanged}"
@@ -259,4 +226,4 @@ export class contentCardLinxeeEditor extends LitElement {
   }
 }
 
-customElements.define("content-card-linxee-editor", contentCardLinxeeEditor);
+customElements.define("linxee-card-editor", contentCardLinxeeEditor);
