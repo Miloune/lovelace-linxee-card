@@ -1,20 +1,18 @@
 # content-card-linky
 [![HACS Supported](https://img.shields.io/badge/HACS-Supported-green.svg)](https://github.com/custom-components/hacs)
 
-**Cette carte est compatible avec l'integration : [MyEnedis](https://github.com/saniho/apiEnedis)**
-
-**Un question ? Un problème ? Une demande ? Venez en parler sur le [fil de discussion dédié](https://forum.hacf.fr/t/sensor-pour-enedis-apienedis/935) sur le [forum HACF](https://forum.hacf.fr/).**
+**Cette carte est compatible avec : [Lixee](https://lixee.fr/produits/37-zigate-usb-ttl-3770014375148.html)**
 
 ## Bienvenue !
 
-Cette intégration fonctionne à l'aide de la passerelle fournie par https://enedisgateway.tech/.
-
 Cette carte est initialement inspirée de [@royto](https://github.com/royto/linky-card)
 
-Avant de pouvoir utiliser cette intégration, assurez vous : 
-* D'avoir validé la partage de données avec la [passerelle](https://enedisgateway.tech/),
-* D'avoir activé sur votre [espace privé Enedis](https://mon-compte-client.enedis.fr/) la remontée des informations de votre linky,
-* Et d'avoir installé l'integration [MyEnedis](https://github.com/saniho/apiEnedis).
+
+<br>
+ <p align="center">
+<img src="https://raw.githubusercontent.com/Miloune/lovelace-lixee-card/main/example.png" height="300"/>
+ <br>
+ </p>
 
 ## Installer la carte
 <details>
@@ -24,7 +22,7 @@ Avant de pouvoir utiliser cette intégration, assurez vous :
  
  *si vous n'avez pas HACS, pour l'installer cela se passe ici : [HACS : Ajoutez des modules et des cartes personnalisées](https://forum.hacf.fr/t/hacs-ajoutez-des-modules-et-des-cartes-personnalisees/359)
  
-* Ajoutez le dépot personnalisé : `https://github.com/saniho/content-card-linky`
+* Ajoutez le dépot personnalisé : `https://github.com/Miloune/lovelace-lixee-card`
 
 * Choisir la catégorie `Lovelace`
 
@@ -39,18 +37,20 @@ Avant de pouvoir utiliser cette intégration, assurez vous :
 
 <details>
   <summary><b>Manuellement (à faire à chaque mise à jour)</b></summary>
-* Telecharger le fichier [content-card-linky.js](https://github.com/saniho/content-card-linky/blob/main/content-card-linky.js) et le dossier [images](https://github.com/saniho/content-card-linky/tree/main/images) 
+* Telecharger les fichiers [lixee-card.js](https://github.com/Miloune/lovelace-lixee-card/blob/main/dist/lixee-card.js) et [lixee-card-editor.js](https://github.com/Miloune/lovelace-lixee-card/blob/main/dist/lixee-card-editor.js)
   
-* Les mettre dans votre repertoire `www` et l'ajouter dans l'interface ressource
+* Les mettre dans un sous repertoire `lovelace-lixee-card` votre repertoire `www` et l'ajouter dans l'interface ressource
   
 * Configurez la ressource dans votre fichier de configuration.
   
 ```
 resources:
-  - url: /hacsfiles/content-card-linky/content-card-linky.js
+  - url: /hacsfiles/lovelace-lixee-card/lixee-card.js
     type: module
 ```
 </details>
+
+### Redémarrer votre serveur Home Assistant
 
 ## Ajouter la carte
 <details>
@@ -63,40 +63,26 @@ resources:
   * Dans votre éditeur lovelace, ajouter ceci :
 
 ````
-type: 'custom:content-card-linky'
-entity: sensor.myenedis
+type: 'custom:content-card-lixee'
+entity: sensor.linky_base
 ````
 </details>
 
-### Redémarrer votre serveur Home Assistant
+
 
 ## Options disponibles
 
   ````
 type: custom:content-card-linky                 Type de la carte
-nbJoursAffichage: '7'                           Nombre de jour historique
-titleName: Consommation d'hier                  Titre
-entity: sensor.myenedis_XXXXXXXXXXXXXX          Sensor de l'integration [MyEnedis](https://github.com/saniho/apiEnedis)
+titleName: Consommation d'aujourd'hui           Titre
+entity: sensor.linky_base                       Sensor lié à votre Lixee (Linky BASE)
 showIcon: false                                 Affiche l'icon Linky
 showHistory: true                               Affiche l'historique sur plusieurs jours
-showInTableUnit: false                          
-showDayPriceHCHP: false
-showDayHCHP: false                              
-showMonthRatio: false                           
-showTitle: true                                 
-showPeakOffPeak: false
-showDayPrice: true                              
-showPrice: true                                 Affiche le prix de l'historique
-showCurrentMonthRatio: true                     
-showWeekRatio: true                             
+showInTableUnit: false                          Affiche l'unité dans l'historique                         
+showTitle: true                                 Affiche le titre de la carte
+showPrice: true                                 Affiche le prix de la consommation d'aujourd'hui
 showDayName: short                              Affichage des jours de la semaine : "short", "narrow", "long"
 ````
-
-<br>
- <p align="center">
-<img src="https://github.com/saniho/content-card-linky/raw/main/linky.png" height="300"/>
- <br>
- </p>
 
 **************
 
