@@ -1,4 +1,4 @@
-# content-card-linky
+# content-card-lixee
 [![HACS Supported](https://img.shields.io/badge/HACS-Supported-green.svg)](https://github.com/custom-components/hacs)
 
 **Cette carte est compatible avec : [Lixee](https://lixee.fr/produits/37-zigate-usb-ttl-3770014375148.html)**
