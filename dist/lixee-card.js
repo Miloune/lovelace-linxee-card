@@ -352,9 +352,13 @@ class ContentCardLixee extends LitElement {
     return html
       `
         <div class="week-history">
-        ${Array.from(this._data.entries()).filter(([key, value]) => key !== this.getTodayDate().toString()).map(([date, value]) => {
-        return this._renderDay(date, unitOfMeasurement)
-      })}
+        ${Array.from(this._data.entries())
+        .filter(([key, value]) => key !== this.getTodayDate().toString())
+        .sort(([key1, value1], [key2, value2]) => new Date(key1).getTime() - new Date(key2).getTime())
+        .slice(-7)
+        .map(([date, value]) => {
+          return this._renderDay(date, unitOfMeasurement)
+        })}
         </div>
       `
 
