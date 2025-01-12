@@ -88,6 +88,19 @@ class ContentCardLixee extends LitElement {
     if (!this._data) {
       this._data = new Map()
     }
+	
+	if (this._config.priceEntity) {
+		const priceEntity = this._hass.states[this._config.priceEntity];
+		if (priceEntity) {
+		  this._currentPrice = parseFloat(priceEntity.state);
+		} else {
+		  console.warn(`Entité ${this._config.priceEntity} introuvable.`);
+		  this._currentPrice = undefined;
+		}
+	  } else {
+		this._currentPrice = this._config.kWhPrice;
+	  }
+
   }
 
   async _fetchData(entityId, start, end, skipInitialState, withAttributes) {
@@ -102,7 +115,10 @@ class ContentCardLixee extends LitElement {
   }
 
   getPriceFromData(date) {
-    return toFloat(this._data.get(date.toString()) * this._config.kWhPrice, 2)
+	if (!this._currentPrice) {
+		return "-";
+	}
+	return toFloat(this._data.get(date.toString()) * this._currentPrice, 2);
   }
 
   getDateDay(date) {
@@ -247,12 +263,15 @@ class ContentCardLixee extends LitElement {
               <span class="cout-unit">${attributes.unit_of_measurement}</span>
             </div>`
       }
-                  ${this._config.showPrice && this._config.kWhPrice
+                  ${this._config.showPrice && this._currentPrice
         ? html`
                     <div class="cout-block">
-                      <span class="cout" title="Coût journalier">${this.getPriceFromData(this.getTodayDate())}</span><span class="cout-unit"> €</span>
+                      <span class="cout" title="Coût journalier">${this.getPriceFromData(this.getTodayDate())}</span><span class="cout-unit"> &euro;</span>
                     </div>`
-        : html``
+        : html`
+					<div class="error">
+					  <span>Prix kWh indisponible</span>
+					</div>`
       }
                 </div>
                 <div class="variations">
@@ -407,10 +426,10 @@ class ContentCardLixee extends LitElement {
   }
 
   _renderDayPrice(date) {
-    if (this._config.kWhPrice) {
+    if (this._currentPrice) {
       return html
         `
-        <br><span class="cons-val">${this.getPriceFromData(date)} €</span>
+        <br><span class="cons-val">${this.getPriceFromData(date)} &euro;</span>
       `;
     }
   }
@@ -443,8 +462,8 @@ class ContentCardLixee extends LitElement {
       showPrice: true,
       showTitle: false,
       kWhPrice: undefined,
+      priceEntity: undefined,
       updateInterval: 60,
-
       showCurrentMonthRatio: false,
       showMonthRatio: false,
       showWeekRatio: false,
