@@ -18,7 +18,9 @@ if (
   customElements.define("ha-switch", customElements.get("paper-toggle-button"));
 }
 
-const LitElement = customElements.get("hui-masonry-view") ? Object.getPrototypeOf(customElements.get("hui-masonry-view")) : Object.getPrototypeOf(customElements.get("hui-view"));
+const LitElement = customElements.get("hui-masonry-view")
+  ? Object.getPrototypeOf(customElements.get("hui-masonry-view"))
+  : Object.getPrototypeOf(customElements.get("hui-view"));
 const html = LitElement.prototype.html;
 const css = LitElement.prototype.css;
 
@@ -35,6 +37,10 @@ export class contentCardLixeeEditor extends LitElement {
 
   get _entity() {
     return this._config.entity || "";
+  }
+
+  get _priceEntity() {
+    return this._config.priceEntity || "";
   }
 
   get _name() {
@@ -98,7 +104,7 @@ export class contentCardLixeeEditor extends LitElement {
       if (help.importMoreInfoControl) {
         help.importMoreInfoControl("fan");
       }
-    })
+    });
   }
 
   render() {
@@ -116,6 +122,7 @@ export class contentCardLixeeEditor extends LitElement {
             @value-changed="${this._valueChanged}"
           ></paper-input>
           ${this.renderLinkyPicker("Entity", this._entity, "entity")}
+          ${this.renderPriceEntityPicker("Price Entity (input_number)", this._priceEntity, "priceEntity")}
           <!-- Switches -->
           <ul class="switches">
             ${this.renderSwitchOption("Show icon", this._showIcon, "showIcon")}
@@ -160,31 +167,37 @@ export class contentCardLixeeEditor extends LitElement {
     return this.renderPicker(label, entity, configAttr, "sensor.myenedis");
   }
 
+  renderPriceEntityPicker(label, entity, configAttr) {
+    return this.renderPicker(label, entity, configAttr, "input_number");
+  }
+
   renderPicker(label, entity, configAttr, domain) {
     return html`
-              <ha-entity-picker
-                label="${label}"
-                .hass="${this.hass}"
-                .value="${entity}"
-                .configValue="${configAttr}"
-                .includeDomains="${domain}"
-                @change="${this._valueChanged}"
-                allow-custom-entity
-              ></ha-entity-picker>
-            `
+      <ha-entity-picker
+        label="${label}"
+        .hass="${this.hass}"
+        .value="${entity}"
+        .configValue="${configAttr}"
+        .includeDomains="${domain}"
+        @change="${this._valueChanged}"
+        allow-custom-entity
+      ></ha-entity-picker>
+    `;
   }
+
   renderSwitchOption(label, state, configAttr) {
     return html`
       <li class="switch">
-              <ha-switch
-                .checked=${state}
-                .configValue="${configAttr}"
-                @change="${this._valueChanged}">
-                </ha-switch><span>${label}</span>
-            </div>
-          </li>
-    `
+        <ha-switch
+          .checked=${state}
+          .configValue="${configAttr}"
+          @change="${this._valueChanged}">
+        </ha-switch>
+        <span>${label}</span>
+      </li>
+    `;
   }
+
   _valueChanged(ev) {
     if (!this._config || !this.hass) {
       return;
